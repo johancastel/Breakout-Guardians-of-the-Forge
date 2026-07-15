@@ -1,143 +1,176 @@
-#Algoritmo General
-#INICIO
+# Pseudocódigo del Game Loop Principal
 
-    Inicializar el juego
+## Algoritmo General: Breakout - Guardians of the Forge
 
-    Cargar recursos del juego
-        - Sprites
-        - Sonidos
-        - Fuentes
-        - Configuración
+```text
+INICIO
 
-    Establecer el estado inicial como TITLE
+    // 1. Inicialización e Instanciación de Objetos
+    game = Game:new()
+    game:load()
 
-    Mientras la aplicación esté en ejecución hacer
+    Establecer estado inicial: game.currentState = "TITLE"
 
-        Leer la entrada del jugador
+    // 2. Ciclo Principal del Juego (Game Loop)
+    Mientras game.isRunning == verdadero hacer
 
-        Según el estado actual del juego hacer
+        // --- FASE 1: LEER ENTRADA (INPUT) ---
+        input = LeerEntradaTeclado()
 
-            TITLE
+        // --- FASE 2: ACTUALIZAR ESTADO (UPDATE) ---
+        // Se calcula el tiempo transcurrido desde el último frame (Delta Time)
+        dt = ObtenerDeltaTime()
 
-                Mostrar pantalla principal
+        Según game.currentState hacer
 
-                Si el jugador presiona ENTER entonces
-
-                    Cambiar estado a LOADING_LEVEL
-
+            "TITLE"
+                Si input.enter == presionado entonces
+                    game:changeState("LOADING_LEVEL")
                 Fin Si
 
+            "LOADING_LEVEL"
+                level = Level:new()
+                level:loadLevel(game.currentLevel)
+                
+                paddle = Paddle:new()
+                ball = Ball:new()
+                ball:reset()
+                
+                ui = UI:new()
+                ui:updateLives(game.lives)
+                ui:updateScore(0)
+                
+                game:changeState("PLAY")
 
-            LOADING_LEVEL
-
-                Cargar el nivel actual
-
-                Crear los bloques
-
-                Inicializar la pelota
-
-                Posicionar la barra
-
-                Inicializar la interfaz
-
-                Cambiar estado a PLAY
-
-
-            PLAY
-
-                Actualizar la barra
-
-                Actualizar la pelota
-
-                Detectar colisiones
-
-                Actualizar bloques
-
-                Actualizar poderes
-
-                Actualizar la interfaz
-
-                Dibujar todos los elementos del juego
-
-                Si el jugador presiona ESC entonces
-
-                    Cambiar estado a PAUSE
-
+            "PLAY"
+                // Entrada del jugador para mover la paleta
+                Si input.flecha_izquierda == presionado entonces
+                    paddle:moveLeft()
+                Sino Si input.flecha_derecha == presionado entonces
+                    paddle:moveRight()
                 Fin Si
 
-                Si el jugador pierde todas las vidas entonces
+                // Actualizaciones físicas con Delta Time (dt)
+                paddle:update(dt)
+                ball:move()
+                ball:update(dt)
+                level:update(dt)
 
-                    Cambiar estado a GAME_OVER
-
+                // Detección y resolución de colisiones
+                Si DetectarColision(ball, paddle) entonces
+                    ball:bounce()
+                    sonido_rebote:play()
                 Fin Si
 
-                Si todos los bloques fueron destruidos entonces
+                Para cada bloque en level.bricks hacer
+                    Si DetectarColision(ball, bloque) entonces
+                        bloque:hit()
+                        ball:bounce()
+                        Si bloque.health == 0 entonces
+                            bloque:destroy()
+                            ui:updateScore(100)
+                            Si bloque.containsPower == verdadero entonces
+                                powerup = PowerUp:new()
+                                powerup:spawn(bloque.x, bloque.y, "fireball")
+                            Fin Si
+                        Fin Si
+                    Fin Si
+                Fin Para
 
-                    Cambiar estado a LEVEL_COMPLETE
-
+                // Comprobación de poder activo
+                Si powerup != nulo y powerup.isActive entonces
+                    powerup:update(dt)
+                    Si DetectarColision(powerup, paddle) entonces
+                        paddle:catchPower(powerup.type)
+                        powerup:apply(ball) // o paddle
+                    Fin Si
                 Fin Si
 
-
-            PAUSE
-
-                Mostrar menú de pausa
-
-                Esperar la decisión del jugador
-
-                Si el jugador selecciona CONTINUAR entonces
-
-                    Cambiar estado a PLAY
-
+                // Control de vidas y derrota
+                Si ball.y > Pantalla.alto entonces
+                    game.lives = game.lives - 1
+                    ui:updateLives(game.lives)
+                    Si game.lives == 0 entonces
+                        game:changeState("GAME_OVER")
+                    Sino
+                        ball:reset()
+                    Fin Si
                 Fin Si
 
-                Si el jugador selecciona SALIR entonces
-
-                    Finalizar aplicación
-
+                // Control de victoria de nivel
+                Si level:isCompleted() entonces
+                    game:changeState("LEVEL_COMPLETE")
                 Fin Si
 
-
-            LEVEL_COMPLETE
-
-                Mostrar mensaje de nivel completado
-
-                Calcular bonificación
-
-                Incrementar el número del nivel
-
-                Si existen más niveles entonces
-
-                    Cambiar estado a LOADING_LEVEL
-
-                En caso contrario
-
-                    Cambiar estado a TITLE
-
+                // Transición a pausa
+                Si input.escape == presionado entonces
+                    game:changeState("PAUSE")
                 Fin Si
 
-
-            GAME_OVER
-
-                Mostrar pantalla de Game Over
-
-                Mostrar puntaje final
-
-                Si el jugador presiona ENTER entonces
-
-                    Reiniciar partida
-
-                    Cambiar estado a TITLE
-
+            "PAUSE"
+                Si input.tecla_c == presionado entonces
+                    game:changeState("PLAY") // Resume
+                Sino Si input.tecla_s == presionado entonces
+                    game.isRunning = falso  // Salir
                 Fin Si
 
-                Si el jugador selecciona SALIR entonces
+            "LEVEL_COMPLETE"
+                game:nextLevel()
+                Si game.currentLevel <= MAX_NIVELES entonces
+                    game:changeState("LOADING_LEVEL")
+                Sino
+                    game:changeState("TITLE")
+                Fin Si
 
-                    Finalizar aplicación
-
+            "GAME_OVER"
+                Si input.enter == presionado entonces
+                    game:restartGame()
+                    game:changeState("TITLE")
+                Sino Si input.tecla_s == presionado entonces
+                    game.isRunning = falso
                 Fin Si
 
         Fin Según
 
+        // --- FASE 3: DIBUJAR PANTALLA (RENDER) ---
+        LimpiarPantalla()
+
+        Según game.currentState hacer
+
+            "TITLE"
+                DibujarPantallaTitulo()
+
+            "LOADING_LEVEL"
+                DibujarMensajeCarga()
+
+            "PLAY"
+                level:draw()
+                paddle:draw()
+                ball:draw()
+                Si powerup != nulo y powerup.isActive entonces
+                    powerup:draw()
+                Fin Si
+                ui:drawHUD()
+
+            "PAUSE"
+                level:draw()
+                paddle:draw()
+                ball:draw()
+                ui:drawHUD()
+                DibujarMenuPausa()
+
+            "LEVEL_COMPLETE"
+                ui:drawHUD()
+                DibujarMensajeVictoriaNivel()
+
+            "GAME_OVER"
+                DibujarPantallaGameOver()
+
+        Fin Según
+
+        MostrarEnPantalla()
+
     Fin Mientras
 
 FIN
+```
